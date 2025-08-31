@@ -1,0 +1,7 @@
+What's new in 6.49.19  (2025-Jun-20 16:45):
+
+*) lte - added support for R11e-LTE6 v039 firmware release;
+*) security - allow only "http:" and "https:" schemas in relevant dst fields;
+*) system - fixed v6 to v7 upgrade from separate packages;
+*) system - improved upgrade procedure reliability;
+*) upgrade - the upgrade, testing, and development channels now direct to the latest stable version of RouterOS v7;
