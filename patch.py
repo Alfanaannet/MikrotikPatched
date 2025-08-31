@@ -60,40 +60,53 @@ def patch_bzimage(data: bytes, key_dict: dict):
 
 def patch_block(dev: str, file: str, key_dict):
     BLOCK_SIZE = 4096
-    # sudo debugfs /dev/nbd0p1 -R 'stats' | grep "Block size" | sed -n '1p' | cut -d ':' -f 2
 
-    # sudo debugfs /dev/nbd0p1 -R 'stat boot/initrd.rgz' 2> /dev/null | sed -n '11p'
     stdout, _ = run_shell_command(
-        f"debugfs {dev} -R 'stat {file}' 2> /dev/null | sed -n '11p' ")
-    # (0-11):1592-1603, (IND):1173, (12-15):1604-1607, (16-26):1424-1434
+        f"debugfs {dev} -R 'stat {file}' 2> /dev/null | sed -n '11p'")
+    
     blocks_info = stdout.decode().strip().split(',')
     blocks = []
     ind_block_id = None
+
     for block_info in blocks_info:
         _tmp = block_info.strip().split(':')
+        
+        if len(_tmp) != 2:
+            print(f"⚠️  Skipping malformed block_info: '{block_info.strip()}'")
+            continue
+        
         if _tmp[0].strip() == '(IND)':
-            ind_block_id = int(_tmp[1])
+            try:
+                ind_block_id = int(_tmp[1])
+            except ValueError:
+                print(f"⚠️  Invalid ind_block_id in: '{block_info.strip()}'")
+                continue
         else:
-            id_range = _tmp[0].strip().replace(
-                '(', '').replace(')', '').split('-')
-            block_range = _tmp[1].strip().replace(
-                '(', '').replace(')', '').split('-')
-            blocks += [id for id in range(int(block_range[0]),
-                                          int(block_range[1])+1)]
-    print(f' blocks : {len(blocks)} ind_block_id : {ind_block_id}')
+            try:
+                block_range = _tmp[1].strip().replace('(', '').replace(')', '').split('-')
+                if len(block_range) == 1:
+                    blocks.append(int(block_range[0]))
+                else:
+                    blocks += [i for i in range(int(block_range[0]), int(block_range[1]) + 1)]
+            except Exception as e:
+                print(f"⚠️  Failed to parse block range from: '{block_info.strip()}': {e}")
+                continue
 
-    # sudo debugfs /dev/nbd0p1  -R 'cat boot/initrd.rgz' > data
+    print(f'✅ Parsed {len(blocks)} blocks, IND block ID: {ind_block_id}')
+
+    # Read original file content
     data, stderr = run_shell_command(
         f"debugfs {dev} -R 'cat {file}' 2> /dev/null")
+
     new_data = patch_kernel(data, key_dict)
-    print(f'write block {len(blocks)} : [', end="")
+
+    print(f'📝 Writing {len(blocks)} blocks...')
     with open(dev, 'wb') as f:
         for index, block_id in enumerate(blocks):
-            print('#', end="")
-            f.seek(block_id*BLOCK_SIZE)
-            f.write(new_data[index*BLOCK_SIZE:(index+1)*BLOCK_SIZE])
+            f.seek(block_id * BLOCK_SIZE)
+            f.write(new_data[index * BLOCK_SIZE:(index + 1) * BLOCK_SIZE])
         f.flush()
-        print(']')
+    print('✅ Patch completed.')
 
 
 def patch_initrd_xz(initrd_xz: bytes, key_dict: dict, ljust=True):
