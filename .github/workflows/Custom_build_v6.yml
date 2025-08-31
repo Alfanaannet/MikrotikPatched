@@ -158,7 +158,7 @@ jobs:
                      -boot-info-table \
                      -R -J \
                      new_iso/
-        sudo mkdir all_packages
+        sudo mkdir -p all_packages
         sudo cp new_iso/*.npk all_packages/
         sudo rm -rf new_iso/
         cd all_packages/
