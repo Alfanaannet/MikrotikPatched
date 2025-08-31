@@ -1,13 +1,35 @@
-name: Build Custom RouterOS v6
+name: Patch Mikrotik RouterOS 6.x
 
 on:
+  # push:
+  #   branches: [ "main" ]
+  # schedule:
+  #   - cron: '0 */24 * * *'
   workflow_dispatch:
     inputs:
-      latest_version:
-        description: 'RouterOS version to process'
+      channel:
+        description: 'Channel (stable, long-term)'
         required: true
-        default: '6.49.7'
-
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - long-term
+      version:
+        description: "Specify version (e.g., 6.49.19), empty for latest"
+        required: false
+        default: ''
+        type: string
+      buildtime:
+        description: "Custom build time, leave empty for now,when set specify version"
+        required: false
+        default: ''
+        type: string
+      release:
+        description: "Release to GitHub & Upload "
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: write
 
@@ -18,11 +40,52 @@ env:
   CUSTOM_NPK_SIGN_PUBLIC_KEY: ${{ secrets.CUSTOM_NPK_SIGN_PUBLIC_KEY }}
   CUSTOM_LICENSE_PRIVATE_KEY: ${{ secrets.CUSTOM_LICENSE_PRIVATE_KEY }}
   CUSTOM_LICENSE_PUBLIC_KEY: ${{ secrets.CUSTOM_LICENSE_PUBLIC_KEY }}
-
+  
 jobs:
-  Build_Custom_ROS_v6:
+  Set_Variables:
+    runs-on: ubuntu-22.04
+    outputs:
+      BUILD_TIME: ${{ steps.set_vars.outputs.BUILD_TIME }}
+      RELEASE: ${{ steps.set_vars.outputs.RELEASE }}
+      MATRIX_JSON: ${{ steps.set_vars.outputs.MATRIX_JSON }}
+    steps:
+      - name: Set variables
+        id: set_vars
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            BUILD_TIME="${{ github.event.inputs.buildtime }}"
+            RELEASE="${{ github.event.inputs.release }}"
+            if [ -z "$BUILD_TIME" ]; then
+              BUILD_TIME=$(date +'%s')
+            fi
+            if [ -z "$RELEASE" ]; then
+              RELEASE=false
+            fi
+            ARCH="${{ github.event.inputs.arch }}"
+            CHANNEL="${{ github.event.inputs.channel }}"
+            MATRIX_JSON=$(jq -nc --arg arch "$ARCH" --arg channel "$CHANNEL" '[{arch: $arch, channel: $channel}]')
+          else
+            BUILD_TIME=$(date +'%s')
+            RELEASE=true
+            MATRIX_JSON='[{"arch":"x86","channel":"stable"},{"arch":"x86","channel":"long-term"}]'
+          fi
+          echo "BUILD_TIME=$BUILD_TIME" >> $GITHUB_OUTPUT
+          echo "RELEASE=$RELEASE" >> $GITHUB_OUTPUT
+          echo "MATRIX_JSON=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "BUILD_TIME: $BUILD_TIME"
+          echo "RELEASE: $RELEASE"
+          echo "MATRIX_JSON: $MATRIX_JSON"
+          
+  Build_ROS_v6:
+    needs: Set_Variables
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix: 
+        include: ${{ fromJSON(needs.Set_Variables.outputs.MATRIX_JSON) }}
+    env:
+      TZ: 'Asia/Shanghai'
+      BUILD_TIME: ${{ needs.Set_Variables.outputs.BUILD_TIME }}
+      RELEASE: ${{ needs.Set_Variables.outputs.RELEASE }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -32,12 +95,30 @@ jobs:
       with:
         python-version: '3.x'
 
-    - name: Set Version
+    - name: Check latest version
+      id: get_latest
       run: |
-        LATEST_VERSION="${{ github.event.inputs.latest_version }}"
+        echo $(uname -a)
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            LATEST_VERSION="${{ github.event.inputs.version }}"
+          else
+            read LATEST_VERSION BUILD_TIME <<< "$(wget -nv -O - "https://upgrade.mikrotik.com/routeros/NEWEST6.${{ matrix.channel }}")"
+          fi
+        else
+          read LATEST_VERSION BUILD_TIME <<< "$(wget -nv -O - "https://upgrade.mikrotik.com/routeros/NEWEST6.${{ matrix.channel }}")"
+        fi
+        echo Build Time:$BUILD_TIME
+        echo Latest Version:$LATEST_VERSION
+        echo "has_new_version=true" >> $GITHUB_OUTPUT
+        wget -nv -O CHANGELOG https://upgrade.mikrotik.com/routeros/$LATEST_VERSION/CHANGELOG
+        cat CHANGELOG
         echo "LATEST_VERSION=${LATEST_VERSION}" >> $GITHUB_ENV
-
+        echo "BUILD_TIME=${BUILD_TIME}" >> $GITHUB_ENV
+        sudo apt-get update > /dev/null
+        
     - name: Cache mikrotik-${{ env.LATEST_VERSION }}.iso
+      if: steps.get_latest.outputs.has_new_version == 'true'
       id: cache_mikrotik
       uses: actions/cache@v4
       with:
@@ -45,11 +126,12 @@ jobs:
         key: mikrotik-${{ env.LATEST_VERSION }}-x86
 
     - name: Get mikrotik-${{ env.LATEST_VERSION }}.iso
-      if: steps.cache_mikrotik.outputs.cache-hit != 'true'
+      if: steps.get_latest.outputs.has_new_version == 'true' && steps.cache_mikrotik.outputs.cache-hit != 'true'
       run: |
         sudo curl -s -o mikrotik.iso https://download.mikrotik.com/routeros/$LATEST_VERSION/mikrotik-$LATEST_VERSION.iso
 
     - name: Patch mikrotik-${{ env.LATEST_VERSION }}.iso
+      if: steps.get_latest.outputs.has_new_version == 'true'
       run: |
         sudo apt-get install -y mkisofs xorriso --no-install-recommends > /dev/null
         sudo mkdir iso
@@ -84,6 +166,7 @@ jobs:
         cd ../
 
     - name: Cache install-image-${{ env.LATEST_VERSION }}.zip
+      if: steps.get_latest.outputs.has_new_version == 'true'
       id: cache_install_image
       uses: actions/cache@v4
       with:
@@ -91,11 +174,12 @@ jobs:
         key: install-image-${{ env.LATEST_VERSION }}-x86
 
     - name: Get install-image-${{ env.LATEST_VERSION }}.zip
-      if: steps.cache_install_image.outputs.cache-hit != 'true'
+      if: steps.get_latest.outputs.has_new_version == 'true' && steps.cache_install_image.outputs.cache-hit != 'true'
       run: |
         sudo curl -s -o install-image.zip https://download.mikrotik.com/routeros/$LATEST_VERSION/install-image-$LATEST_VERSION.zip
 
     - name: Patch install-image-${{ env.LATEST_VERSION }}.img
+      if: steps.get_latest.outputs.has_new_version == 'true'
       run: |
         sudo apt-get install -y qemu-utils extlinux --no-install-recommends > /dev/null
         sudo unzip install-image.zip
@@ -114,8 +198,9 @@ jobs:
         sudo mv install-image-$LATEST_VERSION.img install-image-$LATEST_VERSION-OEM.img
         sudo zip install-image-$LATEST_VERSION-OEM.img.zip install-image-$LATEST_VERSION-OEM.img
         sudo rm install-image-$LATEST_VERSION-OEM.img
-
+        
     - name: Cache chr-${{ env.LATEST_VERSION }}.zip
+      if: steps.get_latest.outputs.has_new_version == 'true'
       id: cache_chr_img
       uses: actions/cache@v4
       with:
@@ -123,41 +208,73 @@ jobs:
         key: chr-${{ env.LATEST_VERSION }}-x86
 
     - name: Get chr-${{ env.LATEST_VERSION }}.zip
-      if: steps.cache_chr_img.outputs.cache-hit != 'true'
+      if: steps.get_latest.outputs.has_new_version == 'true' && steps.cache_chr_img.outputs.cache-hit != 'true'
       run: |
           sudo curl -s -o chr.img.zip https://download.mikrotik.com/routeros/$LATEST_VERSION/chr-$LATEST_VERSION.img.zip
 
     - name: Patch chr-${{ env.LATEST_VERSION }}.img
+      if: steps.get_latest.outputs.has_new_version == 'true'
       run: |
-        sudo apt-get install -y qemu-utils extlinux --no-install-recommends > /dev/null
-        sudo unzip chr.img.zip
         sudo modprobe nbd
+        sudo apt-get install -y qemu-utils extlinux > /dev/null
+        sudo mkdir ./chr
+        sudo cp chr.img chr-$LATEST_VERSION.img
         sudo qemu-nbd -c /dev/nbd0 -f raw chr-$LATEST_VERSION.img
-        sudo mkdir -p chr/{boot,routeros}
         sudo -E python3 patch.py block /dev/nbd0p1 boot/initrd.rgz
-        sudo mount /dev/nbd0p1 chr/
-        sudo -E python3 patch.py npk chr/var/pdb/routeros-x86/image
-        sudo cp chr/var/pdb/routeros-x86/image all_packages/routeros-x86-$LATEST_VERSION.npk
-        sudo cp all_packages/routeros-x86-$LATEST_VERSION.npk routeros-x86-$LATEST_VERSION-OEM.npk
-        sudo umount chr/
+        sudo mount /dev/nbd0p1 ./chr
+        sudo cp ./all_packages/dude-$LATEST_VERSION.npk ./chr/var/pdb/dude/image
+        sudo -E python3 patch.py npk ./chr/var/pdb/routeros-x86/image
+        sudo cp ./chr/var/pdb/routeros-x86/image ./all_packages/routeros-x86-$LATEST_VERSION.npk
+        #sudo mkdir -p ./chr/var/pdb/option
+        #sudo cp ./all_packages/option-$LATEST_VERSION.npk ./chr/var/pdb/option/image
+        sudo umount ./chr
         sudo qemu-nbd -d /dev/nbd0
-        sudo rm -rf chr/
+        sudo rm -rf ./chr
+        sudo qemu-img convert -f raw -O qcow2 chr-$LATEST_VERSION.img chr-$LATEST_VERSION.qcow2
+        sudo qemu-img convert -f raw -O vmdk chr-$LATEST_VERSION.img chr-$LATEST_VERSION.vmdk
+        sudo qemu-img convert -f raw -O vpc chr-$LATEST_VERSION.img chr-$LATEST_VERSION.vhd
+        sudo qemu-img convert -f raw -O vhdx chr-$LATEST_VERSION.img chr-$LATEST_VERSION.vhdx
+        sudo qemu-img convert -f raw -O vdi chr-$LATEST_VERSION.img chr-$LATEST_VERSION.vdi
+
+        sudo zip chr-$LATEST_VERSION.qcow2.zip chr-$LATEST_VERSION.qcow2
+        sudo zip chr-$LATEST_VERSION.vmdk.zip chr-$LATEST_VERSION.vmdk
+        sudo zip chr-$LATEST_VERSION.vhd.zip chr-$LATEST_VERSION.vhd
+        sudo zip chr-$LATEST_VERSION.vhdx.zip chr-$LATEST_VERSION.vhdx
+        sudo zip chr-$LATEST_VERSION.vdi.zip chr-$LATEST_VERSION.vdi
+        sudo zip chr-$LATEST_VERSION.img.zip chr-$LATEST_VERSION.img
+
+        sudo rm chr-$LATEST_VERSION.qcow2
+        sudo rm chr-$LATEST_VERSION.vmdk
+        sudo rm chr-$LATEST_VERSION.vhd
+        sudo rm chr-$LATEST_VERSION.vhdx
+        sudo rm chr-$LATEST_VERSION.vdi
+        sudo rm chr-$LATEST_VERSION.img
+
+        cd ./all_packages
+        sudo zip ../all_packages-x86-$LATEST_VERSION.zip *.npk
+        cd ..
         
-    - name: Ensure CHANGELOG file
+    - name: Update latest version
+      if: steps.get_latest.outputs.has_new_version == 'true'
       run: |
-        if [ ! -f "CHANGELOG" ]; then
-          echo "No Change Log File Found" > CHANGELOG
-        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add latest6.txt
+        git commit -m "Update latest version"
+        git push
 
     - name: Create Release tag ${{ env.LATEST_VERSION }}
+      if: steps.get_latest.outputs.has_new_version == 'true'
       uses: softprops/action-gh-release@v2
       with:
         name: "RouterOS ${{ env.LATEST_VERSION }}"
         body_path: "CHANGELOG"
         tag_name: ${{ env.LATEST_VERSION }}
         make_latest: false
+        prerelease:  ${{ matrix.channel == 'testing' }}
         files: |
-          mikrotik-${{ env.LATEST_VERSION }}-OEM.iso
-          install-image-${{ env.LATEST_VERSION }}-OEM.*.zip
-          routeros-x86-${{ env.LATEST_VERSION }}-OEM.npk
-          all_packages-x86-${{ env.LATEST_VERSION }}-OEM.zip
+          mikrotik-${{ env.LATEST_VERSION }}.iso
+          chr-${{ env.LATEST_VERSION }}*.zip
+          install-image-${{ env.LATEST_VERSION }}.zip
+          routeros-x86-${{ env.LATEST_VERSION }}.npk
+          all_packages-x86-${{ env.LATEST_VERSION }}.zip
