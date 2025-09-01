@@ -344,11 +344,8 @@ jobs:
         sudo mount /dev/nbd0p1 ./img/boot/
         sudo cp chr.img chr-$LATEST_VERSION-legacy-bios.img 
         sudo qemu-nbd -c /dev/nbd1 -f raw chr-$LATEST_VERSION-legacy-bios.img
-        sudo -E python3 patch.py block /dev/nbd1p1 EFI/BOOT/BOOTX64.EFI
         sudo mkdir -p ./chr/{boot,routeros}
         sudo mount /dev/nbd1p1 ./chr/boot/
-        sudo mkdir -p  ./img/boot/EFI/BOOT
-        sudo cp ./chr/boot/EFI/BOOT/BOOTX64.EFI ./img/boot/EFI/BOOT/BOOTX64.EFI
         sudo umount /dev/nbd1p1
         sudo shred -v -n 1 -z /dev/nbd1p2 
         sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd1p2
