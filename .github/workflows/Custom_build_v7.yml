@@ -369,7 +369,7 @@ jobs:
           sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd1p2
           sudo mount /dev/nbd1p2 ./chr/routeros/
           sudo mkdir -p ./chr/routeros/{var/pdb/{system,option},boot,rw/disk}
-          sudo cp ./all_packages/routeros-$LATEST_VERSION$ARCH.npk ./chr/routeros/var/pdb/system/image
+          sudo cp all_packages/routeros-$LATEST_VERSION$ARCH.npk ./chr/routeros/var/pdb/system/image
           echo -e '#!/bin/sh\n# This script will be executed *before* RouterOS *loader* start.\n# You can put your own initialization stuff in here\n' | sudo tee ./chr/routeros/rw/disk/rc.local
           sudo umount /dev/nbd1p2
           sudo qemu-nbd -d /dev/nbd1
@@ -429,7 +429,7 @@ jobs:
         sudo umount /dev/nbd0p1
         sudo mount  /dev/nbd0p2 ./img/routeros/
         sudo mkdir -p ./img/routeros/{var/pdb/{system,option},boot,rw}
-        sudo cp ./all_packages/routeros-$LATEST_VERSION$ARCH.npk ./img/routeros/var/pdb/system/image
+        sudo cp all_packages/routeros-$LATEST_VERSION*.npk ./img/routeros/var/pdb/system/image
         sudo umount /dev/nbd0p2
         sudo rm -rf ./img
         sudo qemu-nbd -d /dev/nbd0
@@ -505,15 +505,15 @@ jobs:
     - name: Patch all_packages{{ env.ARCH }}-${{ env.LATEST_VERSION }}.zip
       if: steps.get_latest.outputs.has_new_version == 'true' && matrix.arch != 'x86' && matrix.arch != 'arm64'
       run: |
-        sudo unzip all_packages.zip -d ./all_packages
+        sudo unzip all_packages.zip -d all_packages
         sudo cp routeros.npk routeros-$LATEST_VERSION$ARCH.npk
         sudo -E python3 patch.py npk routeros-$LATEST_VERSION$ARCH.npk
-        NPK_FILES=$(find ./all_packages/*.npk)
+        NPK_FILES=$(find all_packages/*.npk)
         for file in $NPK_FILES; do
             sudo -E python3 npk.py sign $file $file
         done
-        sudo cp -f routeros-$LATEST_VERSION$ARCH.npk ./all_packages/routeros-$LATEST_VERSION$ARCH.npk
-        cd ./all_packages
+        sudo cp -f routeros-$LATEST_VERSION$ARCH.npk all_packages/routeros-$LATEST_VERSION$ARCH.npk
+        cd all_packages
         sudo zip ../all_packages-${{ matrix.arch }}-$LATEST_VERSION.zip *.npk
         cd ..
 
@@ -554,7 +554,7 @@ jobs:
         sudo cp syslinux.cfg ./install/
         sudo rm syslinux.cfg
         sudo cp ./BOOTX64.EFI ./install/linux
-        NPK_FILES=($(find ./all_packages/*.npk))
+        NPK_FILES=($(find all_packages/*.npk))
         for ((i=1; i<=${#NPK_FILES[@]}; i++))
         do
           echo "${NPK_FILES[$i-1]}=>$i.npk" 
