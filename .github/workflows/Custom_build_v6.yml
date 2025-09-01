@@ -145,6 +145,15 @@ jobs:
         sudo -E python3 patch.py npk routeros-x86-$LATEST_VERSION.npk
         sudo -E python3 patch.py kernel new_iso/isolinux/initrd.rgz
         NPK_FILES=$(find new_iso/*.npk)
+        if [ -z "$NPK_FILES" ]; then
+            echo "No .npk files found in iso, downloading..."
+            URL="https://download.mikrotik.com/routeros/$LATEST_VERSION/all_packages-${{ matrix.arch }}-$LATEST_VERSION.zip"
+            TMP_ZIP="./all_packages.zip"
+            sudo wget -nv -O "$TMP_ZIP" "$URL"
+            sudo unzip -o "$TMP_ZIP" -d ./new_iso
+            sudo rm -f "$TMP_ZIP"
+            NPK_FILES=$(find ./new_iso -type f -name "*.npk")
+        fi
         if [ -n "$NPK_FILES" ]; then
             for file in $NPK_FILES; do
               sudo -E python3 patch.py npk $file
