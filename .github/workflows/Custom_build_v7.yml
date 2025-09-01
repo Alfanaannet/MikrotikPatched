@@ -213,13 +213,13 @@ jobs:
                       -R -J \
                       ./new_iso
         fi
-        sudo rm -rf ./efiboot
-        sudo mkdir ./all_packages
-        sudo cp ./new_iso/*.npk ./all_packages/
-        sudo rm -rf ./new_iso
-        cd ./all_packages
-        sudo zip ../all_packages-${{ matrix.arch }}-$LATEST_VERSION.zip *.npk
-        cd ..
+        sudo rm -rf efiboot/
+        sudo mkdir all_packages_iso$ARCH-$LATEST_VERSION
+        sudo cp new_iso/*.npk all_packages_iso$ARCH-$LATEST_VERSION/
+        sudo rm -rf new_iso/
+        cd all_packages_iso$ARCH-$LATEST_VERSION/
+        sudo zip ../all_packages$ARCH-$LATEST_VERSION.zip *.npk
+        cd ../
 
     - name: Cache chr-${{ env.LATEST_VERSION }}${{ env.ARCH }}.img.zip
       if: steps.get_latest.outputs.has_new_version == 'true' && (matrix.arch == 'x86' || matrix.arch == 'arm64')
