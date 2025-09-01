@@ -346,6 +346,7 @@ jobs:
         sudo umount /dev/nbd0p1
         sudo mount  /dev/nbd0p2 ./img/routeros/
         sudo mkdir -p ./img/routeros/{var/pdb/{system,option},boot,rw}
+        sudo ls
         sudo cp ./all_packages/option-$LATEST_VERSION.npk ./img/routeros/var/pdb/option/image
         sudo cp ./all_packages/routeros-x86-$LATEST_VERSION.npk ./img/routeros/var/pdb/system/image
         sudo umount /dev/nbd0p2
