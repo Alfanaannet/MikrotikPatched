@@ -342,20 +342,6 @@ jobs:
         sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd0p2
         sudo mkdir -p ./img/{boot,routeros}
         sudo mount /dev/nbd0p1 ./img/boot/
-        
-        sudo zip chr-$LATEST_VERSION-legacy-bios.qcow2.zip chr-$LATEST_VERSION-legacy-bios.qcow2
-        sudo zip chr-$LATEST_VERSION-legacy-bios.vmdk.zip chr-$LATEST_VERSION-legacy-bios.vmdk
-        sudo zip chr-$LATEST_VERSION-legacy-bios.vhd.zip chr-$LATEST_VERSION-legacy-bios.vhd
-        sudo zip chr-$LATEST_VERSION-legacy-bios.vhdx.zip chr-$LATEST_VERSION-legacy-bios.vhdx
-        sudo zip chr-$LATEST_VERSION-legacy-bios.vdi.zip chr-$LATEST_VERSION-legacy-bios.vdi
-        sudo zip chr-$LATEST_VERSION-legacy-bios.img.zip chr-$LATEST_VERSION-legacy-bios.img
-
-        sudo rm chr-$LATEST_VERSION-legacy-bios.qcow2
-        sudo rm chr-$LATEST_VERSION-legacy-bios.vmdk
-        sudo rm chr-$LATEST_VERSION-legacy-bios.vhd
-        sudo rm chr-$LATEST_VERSION-legacy-bios.vhdx
-        sudo rm chr-$LATEST_VERSION-legacy-bios.vdi
-        sudo rm chr-$LATEST_VERSION-legacy-bios.img
 
         sudo umount /dev/nbd0p1
         sudo mount  /dev/nbd0p2 ./img/routeros/
