@@ -152,16 +152,15 @@ jobs:
     - name: Patch mikrotik-${{ env.LATEST_VERSION }}${{ env.ARCH }}.iso
       if: steps.get_latest.outputs.has_new_version == 'true' && (matrix.arch == 'x86' || matrix.arch == 'arm64')
       run: |
-        sudo apt-get install -y mkisofs xorriso > /dev/null
-        sudo mkdir ./iso 
-        sudo mount -o loop,ro mikrotik.iso ./iso
-        sudo mkdir ./new_iso
-        sudo rsync -a ./iso/ ./new_iso/
-        sudo umount ./iso
-        sudo rm -rf ./iso
-        sudo mv ./new_iso/routeros-$LATEST_VERSION$ARCH.npk ./
-        sudo -E python3 patch.py npk routeros-$LATEST_VERSION$ARCH.npk
-        NPK_FILES=$(find ./new_iso -type f -name "*.npk")
+        sudo apt-get install -y mkisofs xorriso --no-install-recommends > /dev/null
+        sudo mkdir iso
+        sudo mount -o loop,ro mikrotik.iso iso/
+        sudo mkdir new_iso
+        sudo cp -r iso/* new_iso/
+        sudo rsync -a iso/ new_iso/
+        sudo umount iso/
+        sudo rm -rf iso/
+        NPK_FILES=$(find new_iso/*.npk)
         if [ -z "$NPK_FILES" ]; then
             echo "No .npk files found in iso, downloading..."
             URL="https://download.mikrotik.com/routeros/$LATEST_VERSION/all_packages-${{ matrix.arch }}-$LATEST_VERSION.zip"
@@ -177,10 +176,6 @@ jobs:
             done
         fi
         sudo cp -f routeros-$LATEST_VERSION$ARCH.npk ./new_iso/
-        sudo -E python3 npk.py create ./new_iso/gps-$LATEST_VERSION$ARCH.npk ./option-$LATEST_VERSION$ARCH.npk option ./option.sfs -desc="busybox"
-        sudo cp option-$LATEST_VERSION$ARCH.npk ./new_iso/
-        sudo -E python3 npk.py create ./new_iso/gps-$LATEST_VERSION$ARCH.npk ./python3-$LATEST_VERSION$ARCH.npk python3 ./python3.sfs -desc="python 3.11.13"
-        sudo cp python3-$LATEST_VERSION$ARCH.npk ./new_iso/
         sudo mkdir ./efiboot
         sudo mount -o loop ./new_iso/efiboot.img ./efiboot
         if [ "${{ matrix.arch }}" == "x86" ]; then
