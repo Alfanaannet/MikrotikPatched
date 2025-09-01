@@ -326,29 +326,37 @@ jobs:
             chr-$LATEST_VERSION.img
         dd if=chr.img of=chr-$LATEST_VERSION.img bs=1 count=446 conv=notrunc
         dd if=pt.bin of=chr-$LATEST_VERSION.img  bs=1 count=66 seek=446 conv=notrunc
+        # Connect the raw image using qemu-nbd
         sudo qemu-nbd -c /dev/nbd0 -f raw chr-$LATEST_VERSION.img
+
+        # Format the partitions
         sudo mkfs.vfat -n "Boot" /dev/nbd0p1
-        sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd0p2
+        sudo mkfs.ext4 -F -L "RouterOS" -m 0 /dev/nbd0p2
+
+        # Create mount points
         sudo mkdir -p ./img/{boot,routeros}
+
+        # Mount partitions
         sudo mount /dev/nbd0p1 ./img/boot/
-        sudo cp chr.img chr-$LATEST_VERSION-legacy-bios.img 
-        sudo qemu-nbd -c /dev/nbd1 -f raw chr-$LATEST_VERSION-legacy-bios.img
-        sudo -E python3 patch.py block /dev/nbd1p1 EFI/BOOT/BOOTX64.EFI
-        sudo mkdir -p ./chr/{boot,routeros}
-        sudo mount /dev/nbd1p1 ./chr/boot/
-        sudo mkdir -p  ./img/boot/EFI/BOOT
-        sudo cp ./chr/boot/EFI/BOOT/BOOTX64.EFI ./img/boot/EFI/BOOT/BOOTX64.EFI
-        sudo umount /dev/nbd1p1
-        sudo shred -v -n 1 -z /dev/nbd1p2 
-        sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd1p2
-        sudo mount /dev/nbd1p2 ./chr/routeros/
-        sudo mkdir -p ./chr/routeros/{var/pdb/{system,option},boot,rw/disk}
-        sudo cp ./all_packages/option-$LATEST_VERSION.npk ./chr/routeros/var/pdb/option/image
-        sudo cp ./all_packages/routeros-$LATEST_VERSION.npk ./chr/routeros/var/pdb/system/image
-        echo -e '#!/bin/sh\n# This script will be executed *before* RouterOS *loader* start.\n# You can put your own initialization stuff in here\n' | sudo tee ./chr/routeros/rw/disk/rc.local
-        sudo umount /dev/nbd1p2
-        sudo qemu-nbd -d /dev/nbd1
-        sudo rm -rf ./chr
+        sudo mount /dev/nbd0p2 ./img/routeros/
+
+        # Copy packages (v6 typically uses only `routeros.npk`, but add others if needed)
+        sudo mkdir -p ./img/routeros/var/pdb/system/image
+        sudo cp ./all_packages/routeros-$LATEST_VERSION.npk ./img/routeros/var/pdb/system/image/
+
+        # Optional: include other packages if needed
+        # sudo mkdir -p ./img/routeros/var/pdb/advanced-tools/image
+        # sudo cp ./all_packages/advanced-tools-$LATEST_VERSION.npk ./img/routeros/var/pdb/advanced-tools/image/
+
+        # Optional: add rc.local
+        sudo mkdir -p ./img/routeros/rw/disk
+        echo -e '#!/bin/sh\n# Init script before RouterOS loader' | sudo tee ./img/routeros/rw/disk/rc.local
+
+        # Clean up
+        sudo umount /dev/nbd0p1
+        sudo umount /dev/nbd0p2
+        sudo qemu-nbd -d /dev/nbd0
+        sudo rm -rf ./img
 
         sudo qemu-img convert -f raw -O qcow2 chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.qcow2
         sudo qemu-img convert -f raw -O vmdk chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.vmdk
@@ -413,7 +421,7 @@ jobs:
         VIRTUAL_SIZE=$(qemu-img info --output=json "$VMDK" | jq '.["virtual-size"]' | head -n 1)
         CAPACITY_MB=$((VIRTUAL_SIZE / 1024 / 1024))
         POPULATED_SIZE=$FILE_SIZE
-        FIRMWARE_TYPE="efi" 
+        FIRMWARE_TYPE="bios" 
         echo "$OVF_TEMPLATE" | sudo sed -e "s|{VMDK_FILE}|$VMDK|g" \
             -e "s|{FILE_SIZE}|$FILE_SIZE|g" \
             -e "s|{CAPACITY_MB}|$CAPACITY_MB|g" \
