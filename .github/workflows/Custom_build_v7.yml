@@ -175,6 +175,8 @@ jobs:
                 sudo -E python3 npk.py sign "$file" "$file"
             done
         fi
+        sudo mv ./new_iso/routeros-$LATEST_VERSION*.npk ./
+        sudo -E python3 patch.py npk routeros-$LATEST_VERSION$ARCH.npk
         sudo cp -f routeros-$LATEST_VERSION$ARCH.npk ./new_iso/
         sudo mkdir ./efiboot
         sudo mount -o loop ./new_iso/efiboot.img ./efiboot
