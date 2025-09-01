@@ -342,61 +342,6 @@ jobs:
         sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd0p2
         sudo mkdir -p ./img/{boot,routeros}
         sudo mount /dev/nbd0p1 ./img/boot/
-
-        sudo cp chr.img chr-$LATEST_VERSION-legacy-bios.img 
-        sudo qemu-nbd -c /dev/nbd1 -f raw chr-$LATEST_VERSION-legacy-bios.img
-
-        # >>> ADD THIS LINE <<<
-        sudo partprobe /dev/nbd1
-
-        # Optional: wait for partitions to be ready
-        sleep 2
-
-        sudo mkdir -p ./chr/{boot,routeros}
-        sudo mount /dev/nbd1p1 ./chr/boot/
-        sudo umount /dev/nbd1p1
-
-        # >>> Use 'dd' instead of 'shred' if shred fails again <<<
-        sudo shred -v -n 1 -z /dev/nbd1p2 || sudo dd if=/dev/zero of=/dev/nbd1p2 bs=1M status=progress
-
-        sudo mkfs.ext4 -F -L "RouterOS" -m 0 /dev/nbd1p2
-        sudo mount /dev/nbd1p2 ./chr/routeros/
-        sudo mkdir -p ./chr/routeros/{var/pdb/{system,option},boot,rw/disk}
-
-        sudo cp ./all_packages/option-$LATEST_VERSION.npk ./chr/routeros/var/pdb/option/image
-        sudo cp ./all_packages/routeros-x86-$LATEST_VERSION.npk ./chr/routeros/var/pdb/system/image
-
-        echo -e '#!/bin/sh\n# This script will be executed *before* RouterOS *loader* start.\n# You can put your own initialization stuff in here\n' | sudo tee ./chr/routeros/rw/disk/rc.local
-
-        sudo umount /dev/nbd1p2
-        sudo qemu-nbd -d /dev/nbd1
-        sudo rm -rf ./chr
-
-        sudo qemu-img convert -f raw -O qcow2 chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.qcow2
-        sudo qemu-img convert -f raw -O vmdk chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.vmdk
-        sudo qemu-img convert -f raw -O vpc chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.vhd
-        sudo qemu-img convert -f raw -O vhdx chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.vhdx
-        sudo qemu-img convert -f raw -O vdi chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios.vdi
-          
-        sudo qemu-img convert -f raw -O vmdk -o subformat=streamOptimized chr-$LATEST_VERSION-legacy-bios.img chr-$LATEST_VERSION-legacy-bios-disk1.vmdk
-        VMDK=chr-$LATEST_VERSION-legacy-bios-disk1.vmdk
-        OVF=chr-$LATEST_VERSION-legacy-bios.ovf
-        OVA=chr-$LATEST_VERSION-legacy-bios.ova
-        FILE_SIZE=$(stat -c %s "$VMDK")
-        VIRTUAL_SIZE=$(qemu-img info --output=json "$VMDK" | jq '.["virtual-size"]' | head -n 1)
-        CAPACITY_MB=$((VIRTUAL_SIZE / 1024 / 1024))
-        POPULATED_SIZE=$FILE_SIZE
-        FIRMWARE_TYPE="bios" 
-        echo "$OVF_TEMPLATE" | sudo sed -e "s|{VMDK_FILE}|$VMDK|g" \
-            -e "s|{FILE_SIZE}|$FILE_SIZE|g" \
-            -e "s|{CAPACITY_MB}|$CAPACITY_MB|g" \
-            -e "s|{POPULATED_SIZE}|$POPULATED_SIZE|g" \
-            -e "s|{FIRMWARE_TYPE}|$FIRMWARE_TYPE|g" |sudo tee $OVF
-        sudo tar -cvf "$OVA" "$OVF" "$VMDK"
-        sudo rm $VMDK
-        sudo rm $OVF
-        sudo zip $OVA.zip $OVA
-        sudo rm $OVA
         
         sudo zip chr-$LATEST_VERSION-legacy-bios.qcow2.zip chr-$LATEST_VERSION-legacy-bios.qcow2
         sudo zip chr-$LATEST_VERSION-legacy-bios.vmdk.zip chr-$LATEST_VERSION-legacy-bios.vmdk
@@ -435,7 +380,7 @@ jobs:
         VIRTUAL_SIZE=$(qemu-img info --output=json "$VMDK" | jq '.["virtual-size"]' | head -n 1)
         CAPACITY_MB=$((VIRTUAL_SIZE / 1024 / 1024))
         POPULATED_SIZE=$FILE_SIZE
-        FIRMWARE_TYPE="efi" 
+        FIRMWARE_TYPE="bios" 
         echo "$OVF_TEMPLATE" | sudo sed -e "s|{VMDK_FILE}|$VMDK|g" \
             -e "s|{FILE_SIZE}|$FILE_SIZE|g" \
             -e "s|{CAPACITY_MB}|$CAPACITY_MB|g" \
