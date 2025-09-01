@@ -141,8 +141,8 @@ jobs:
         sudo rsync -a iso/ new_iso/
         sudo umount iso/
         sudo rm -rf iso/
-        sudo mv ./new_iso/routeros-$LATEST_VERSION-x86.npk ./
-        sudo -E python3 patch.py npk routeros-$LATEST_VERSION-x86.npk
+        sudo mv ./new_iso/routeros-x86-$LATEST_VERSION.npk ./
+        sudo -E python3 patch.py npk routeros-x86-$LATEST_VERSION.npk
         sudo -E python3 patch.py kernel new_iso/isolinux/initrd.rgz
         NPK_FILES=$(find new_iso/*.npk)
         if [ -n "$NPK_FILES" ]; then
@@ -150,7 +150,7 @@ jobs:
               sudo -E python3 patch.py npk $file
             done
         fi
-        sudo cp -f routeros-$LATEST_VERSION-x86.npk ./new_iso/
+        sudo cp -f routeros-x86-$LATEST_VERSION.npk ./new_iso/
         sudo -E python3 npk.py create ./new_iso/gps-$LATEST_VERSION.npk ./option-$LATEST_VERSION.npk option ./option.sfs -desc="busybox"
         sudo cp option-$LATEST_VERSION.npk ./new_iso/
         sudo -E python3 npk.py create ./new_iso/gps-$LATEST_VERSION.npk ./python3-$LATEST_VERSION.npk python3 ./python3.sfs -desc="python 3.11.13"
@@ -360,7 +360,7 @@ jobs:
         sudo mount /dev/nbd1p2 ./chr/routeros/
         sudo mkdir -p ./chr/routeros/{var/pdb/{system,option},boot,rw/disk}
         sudo cp ./all_packages/option-$LATEST_VERSION.npk ./chr/routeros/var/pdb/option/image
-        sudo cp ./all_packages/routeros-$LATEST_VERSION-x86.npk ./chr/routeros/var/pdb/system/image
+        sudo cp ./all_packages/routeros-x86-$LATEST_VERSION.npk ./chr/routeros/var/pdb/system/image
         echo -e '#!/bin/sh\n# This script will be executed *before* RouterOS *loader* start.\n# You can put your own initialization stuff in here\n' | sudo tee ./chr/routeros/rw/disk/rc.local
         sudo umount /dev/nbd1p2
         sudo qemu-nbd -d /dev/nbd1
@@ -410,7 +410,7 @@ jobs:
         sudo mount  /dev/nbd0p2 ./img/routeros/
         sudo mkdir -p ./img/routeros/{var/pdb/{system,option},boot,rw}
         sudo cp ./all_packages/option-$LATEST_VERSION.npk ./img/routeros/var/pdb/option/image
-        sudo cp ./all_packages/routeros-$LATEST_VERSION-x86.npk ./img/routeros/var/pdb/system/image
+        sudo cp ./all_packages/routeros-x86-$LATEST_VERSION.npk ./img/routeros/var/pdb/system/image
         sudo umount /dev/nbd0p2
         sudo rm -rf ./img
         sudo qemu-nbd -d /dev/nbd0
