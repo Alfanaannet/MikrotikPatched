@@ -342,18 +342,32 @@ jobs:
         sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd0p2
         sudo mkdir -p ./img/{boot,routeros}
         sudo mount /dev/nbd0p1 ./img/boot/
+
         sudo cp chr.img chr-$LATEST_VERSION-legacy-bios.img 
         sudo qemu-nbd -c /dev/nbd1 -f raw chr-$LATEST_VERSION-legacy-bios.img
+
+        # >>> ADD THIS LINE <<<
+        sudo partprobe /dev/nbd1
+
+        # Optional: wait for partitions to be ready
+        sleep 2
+
         sudo mkdir -p ./chr/{boot,routeros}
         sudo mount /dev/nbd1p1 ./chr/boot/
         sudo umount /dev/nbd1p1
-        sudo shred -v -n 1 -z /dev/nbd1p2 
-        sudo mkfs.ext4 -F -L "RouterOS"  -m 0 /dev/nbd1p2
+
+        # >>> Use 'dd' instead of 'shred' if shred fails again <<<
+        sudo shred -v -n 1 -z /dev/nbd1p2 || sudo dd if=/dev/zero of=/dev/nbd1p2 bs=1M status=progress
+
+        sudo mkfs.ext4 -F -L "RouterOS" -m 0 /dev/nbd1p2
         sudo mount /dev/nbd1p2 ./chr/routeros/
         sudo mkdir -p ./chr/routeros/{var/pdb/{system,option},boot,rw/disk}
+
         sudo cp ./all_packages/option-$LATEST_VERSION.npk ./chr/routeros/var/pdb/option/image
         sudo cp ./all_packages/routeros-x86-$LATEST_VERSION.npk ./chr/routeros/var/pdb/system/image
+
         echo -e '#!/bin/sh\n# This script will be executed *before* RouterOS *loader* start.\n# You can put your own initialization stuff in here\n' | sudo tee ./chr/routeros/rw/disk/rc.local
+
         sudo umount /dev/nbd1p2
         sudo qemu-nbd -d /dev/nbd1
         sudo rm -rf ./chr
